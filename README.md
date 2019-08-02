@@ -1,4 +1,4 @@
-# Kaggle-Mercedes-Benz
+# Kaggle-Mercedes-Benz Greener Manufacturing
 Mercedes-Benz Greener Manufacturing
 
 This is an [kaggle link](https://www.kaggle.com/c/mercedes-benz-greener-manufacturing/overview). 
