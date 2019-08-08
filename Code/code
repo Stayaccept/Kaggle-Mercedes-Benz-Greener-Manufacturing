@@ -1,0 +1,255 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "import warnings\n",
+    "import matplotlib.pyplot as plt\n",
+    "from tqdm import tqdm\n",
+    "warnings.filterwarnings(\"ignore\")\n",
+    "# pd.set_option('display.max_rows', None)\n",
+    "# pd.set_option('display.max_columns', None)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 73,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import xgboost as xgb\n",
+    "from sklearn.metrics import r2_score\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from sklearn.model_selection import GridSearchCV\n",
+    "from sklearn.preprocessing import OneHotEncoder"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "file_train_name='./Benz_data/train.csv'\n",
+    "file_test_name='./Benz_data/test.csv'"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 62,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "Train=pd.read_csv(file_train_name,index_col='ID')\n",
+    "Test=pd.read_csv(file_test_name,index_col='ID')\n",
+    "target=Train['y']\n",
+    "Train.drop(['y'],axis=1,inplace=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 63,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Train shape (4209, 376)\n",
+      "Test shape (4209, 376)\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(\"Train shape\",Train.shape)\n",
+    "print(\"Test shape\",Test.shape)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 64,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "feature number 376\n",
+      "-----------------------------------\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "int64     368\n",
+       "object      8\n",
+       "dtype: int64"
+      ]
+     },
+     "execution_count": 64,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "print(\"feature number %d\"%(Train.shape[1]))\n",
+    "print('-----------------------------------')\n",
+    "Train.dtypes.value_counts()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 65,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "String:8\n",
+      "Constant:12\n",
+      "2 kind:356\n",
+      "other kind:0\n",
+      "String features: ['X0', 'X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X8']\n",
+      "Constant features: ['X11', 'X93', 'X107', 'X233', 'X235', 'X268', 'X289', 'X290', 'X293', 'X297', 'X330', 'X347']\n"
+     ]
+    }
+   ],
+   "source": [
+    "feature=[[],[],[],[]]\n",
+    "for c in Train.columns:\n",
+    "    t=Train[c].dtype\n",
+    "    u=len(np.unique(Train[c]))\n",
+    "    if t==object:\n",
+    "        feature[0].append(c)\n",
+    "    elif u==1:\n",
+    "        feature[1].append(c)\n",
+    "    elif u==2:\n",
+    "        feature[2].append(c)\n",
+    "    else:\n",
+    "        feature[3].append(c)\n",
+    "    \n",
+    "print(\"String:%d\\nConstant:%d\\n2 kind:%d\\nother kind:%d\"%(len(feature[0]),len(feature[1]),len(feature[2]),len(feature[3])))\n",
+    "print(\"String features:\",feature[0])\n",
+    "print(\"Constant features:\",feature[1])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 68,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "Full=Train.append(Test)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 104,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "new_Full=Full.drop(feature[1],axis=1)\n",
+    "\n",
+    "pre=OneHotEncoder(sparse=False)\n",
+    "pre.fit(new_Full[feature[0]])\n",
+    "tmp=pre.transform(new_Full[feature[0]])\n",
+    "pre_Full=pd.concat([new_Full,pd.DataFrame(tmp,index=new_Full.index)],axis=1)\n",
+    "Last_Full=pre_Full.drop(feature[0],axis=1)\n",
+    "\n",
+    "Train,Test=Last_Full[:4209],Last_Full[4209:]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 145,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "[21:05:15] WARNING: C:/Jenkins/workspace/xgboost-win64_release_0.90/src/objective/regression_obj.cu:152: reg:linear is now deprecated in favor of reg:squarederror.\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "XGBRegressor(base_score=0.5, booster='gbtree', colsample_bylevel=1,\n",
+       "       colsample_bynode=1, colsample_bytree=0.9, gamma=0.001,\n",
+       "       importance_type='gain', learning_rate=0.1, max_delta_step=0,\n",
+       "       max_depth=3, min_child_weight=7, missing=None, n_estimators=55,\n",
+       "       n_jobs=1, nthread=None, objective='reg:linear', random_state=0,\n",
+       "       reg_alpha=0.2, reg_lambda=2, scale_pos_weight=1, seed=0,\n",
+       "       silent=None, subsample=0.7, verbosity=1)"
+      ]
+     },
+     "execution_count": 145,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "params={\n",
+    "        'learning_rate': 0.1, \n",
+    "        'n_estimators': 55, \n",
+    "        'max_depth': 3, \n",
+    "        'min_child_weight': 7, \n",
+    "        'seed': 0,\n",
+    "        'subsample': 0.7, \n",
+    "        'colsample_bytree': 0.9, \n",
+    "        'gamma': 0.001, \n",
+    "        'reg_alpha': 0.2, \n",
+    "        'reg_lambda': 2\n",
+    "}\n",
+    "\n",
+    "# cv_params={\n",
+    "#     'reg_lambda': [1,2,3]\n",
+    "# }\n",
+    "\n",
+    "reg=xgb.XGBRegressor(**params)\n",
+    "# optimized_GBM=GridSearchCV(estimator=reg, param_grid=cv_params, scoring='r2', cv=30,verbose=1, n_jobs=-1)\n",
+    "# optimized_GBM.fit(Train,target)\n",
+    "# print(optimized_GBM.best_score_)\n",
+    "# print(optimized_GBM.best_params_)    \n",
+    "reg.fit(Train,target)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 146,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "csv=pd.DataFrame({'ID':Test.index,'y':reg.predict(Test)})\n",
+    "csv.to_csv('XXX.csv',index=False)"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
